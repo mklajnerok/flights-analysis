@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 data_2007 = pd.read_csv("2007.csv")
 data_2008 = pd.read_csv("2008.csv")
 
+test = data_2007.loc[:100][['Year', 'Month', 'DayofMonth', 'DayOfWeek']]
+data_2007["UniqueCarrier"].isnull().sum()
+
 # identify carriers
 carriers = data_2007.UniqueCarrier.unique()
 
@@ -26,8 +29,7 @@ df = pd.read_csv("delta_flights_data.csv")
 df.drop('Unnamed: 0', axis=1, inplace=True)
 
 # check types of data
-for col in df:
-    print(col, df[col].dtypes)
+df.dtypes
 
 # check relation between columns 5,6,7,8 and 15,16
 delays = df.iloc[:, [4,5,6,7,14,15]]
@@ -193,27 +195,138 @@ test = df.loc[:][['DepTime', 'CRSDepTime', 'DepDelay']]
 - DepTime - CRSDepTime -> DepDelay (total)  /// do not use this way
 """
 
-### FLIGHT LENGTH (column 12,13,14 - 'ActualElapsedTime', 'CRSElapsedTime', 'AirTime') ##############################
+### FLIGHT LENGTH (column 14 - 'AirTime') ##############################
 
+df['AirTime'].describe()
 
+"""
+results:
+- AirTime has Nan in the number of cancelled + diverted
+- average flight took 127,45 minutes, with std 81,75
+- the shortest flight was 12 min and the longest 618 min
+- 75% of the flights are 175 min and shorter (around 3 hours flights)
+"""
 
-
-
-### DELAYS (column 15,16,25,26,27,28,29 - ArrDelay', 'DepDelay',
+### DELAYS (column 12,13,15,16,25,26,27,28,29 - 'ActualElapsedTime', 'CRSElapsedTime', 'ArrDelay', 'DepDelay',
 ### 'CarrierDelay', 'WeatherDelay', 'NASDelay', 'SecurityDelay', 'LateAircraftDelay') ##############################
+
+# total number of delays
+total_delay = pd.DataFrame()
+total_delay = df['ActualElapsedTime'] - df['CRSElapsedTime']
+value_filter = total_delay > 0
+total_delay[value_filter]                                           # 372510 total delays
+
+df.loc[(df['ActualElapsedTime'] - df['CRSElapsedTime']) > 0]        # 372510
+
+total_delay.describe()
+
+
+
+
+
+# when did they happen?
+df['ArrDelay'].describe()
+df['DepDelay'].describe()
+df.loc[df['ArrDelay'] > 15.0]
+df.query('(ArrDelay > 15)')
+arrival_delay_vc = df['ArrDelay'].value_counts()
+
+"""
+results:
+- average arrival delay is 7,57 min
+- variety is huge, std 34,62 min
+- it happened that a flight was 132 minutes before time (CHECK IT), but the biggest arrival delay was 1007 min
+- long arrival delays are not common - most flights have only 12 minutes
+- 192292 flights have arrival delay over 15 min - they are not considered on-time (20,7155%)
+- average departure delay was 7,93 min
+- also high variety, std 30,57 min
+- it happened that departure was 124 min before scheduled, but the latest was 1003 min delay
+- departure delay are not common - not more thatn 6 min for 75% of the flights
+"""
+
+# why did they happen?
+test = df.loc[:][['ActualElapsedTime', 'CRSElapsedTime','CarrierDelay', 'WeatherDelay', 'NASDelay', 'SecurityDelay', 'LateAircraftDelay']]
+
+car_delay_vc = df['CarrierDelay'].value_counts()                # 489472 carrier delay was 0
+weather_delay_vc = df['WeatherDelay'].value_counts()            # 565567 weather delay was 0
+nas_delay_vc = df['NASDelay'].value_counts()                    # 427768 NAS delay was 0
+sec_delay_vc = df['SecurityDelay'].value_counts()               # 574596 security delay was 0
+late_delay_vc = df['LateAircraftDelay'].value_counts()          # 489944 late aircraft was 0
+
 
 
 
 
 ### TIMES od the day(column 5,6,7,8 - 'DepTime', 'CRSDepTime', 'ArrTime', 'CRSArrTime') ##############################
 
+test = df.loc[:][['DepTime', 'CRSDepTime', 'ArrTime', 'CRSArrTime']]
+df_test = df['DepTime'].copy()
+format(df_test, '.2f')
+df_test = int(df_test)
+df_test = pd.to_datetime(df_test, format='%H%M')
 
+
+def extractTime(l):
+    l = str(l)
+    tt = (l.split(' ')[1]).split('.')[1][-4:];
+    return tt[:2] + ':' + tt[-2:];
+
+map(extractTime(x), df_test)
+df_test = df_test.apply(extractTime)
 
 
 ### DATES in the year, week (column 1,2,3,4 - Year', 'Month', 'DayofMonth', 'DayOfWeek') ##############################
 
-# kiedy najwiecej lotow, w roku
-# jaki dzien tygodnia jest nnajbardziej popularny
+df_head = df.head()         # the dataset begins on Jan 17th 2007
+df_tail = df.tail()         # the dataset ends on Dec 13th 2008
+
+year_vc = df['Year'].value_counts()
+month_vc = df['Month'].value_counts()
+dayofweek_vc = df['DayOfWeek'].value_counts()
+
+# create a datetime object in a new column
+df["Date"] = df["Year"].map(str) + "/" + df["Month"].map(str) + "/" + df["DayofMonth"].map(str)
+df["Date"] = pd.to_datetime(df["Date"])
+
+# count
+date_vc = df['Date'].value_counts()
+df_dates = pd.DataFrame(date_vc)
+df_dates.rename(columns={'Date':'NumOfFlights'}, inplace=True)
+df_dates['Date'] = df_dates.index
+df_dates.reset_index(level=0, drop=True, inplace=True)
+df_dates.sort_values('Date', inplace=True)
+df_dates.reset_index(level=0, drop=True, inplace=True)
+
+df_dates[df_dates["Date"] == '2008-01-01']
+
+df_dates['2008'] = df_dates.loc[365:, 'NumOfFlights']
+
+
+x = df_dates['Date']
+y1 = df_dates[:365]['NumOfFlights']
+y2 = df_dates[365:]['NumOfFlights']
+
+plt.plot(x, y1, data=df_dates, marker='o', markerfacecolor='blue',
+         markersize=12, color='skyblue', linewidth=4)
+
+plt.plot('x', 'y2', data=df, marker='', color='olive', linewidth=2)
+plt.plot('x', 'y3', data=df, marker='', color='olive', linewidth=2, linestyle='dashed', label="toto")
+plt.legend()
+
+
+
+"""
+results:
+- There was a decrease in number of flights scheduled for 2008 by 5,0343%
+- there is a gap in flights data - it starts on 17/1/2007 and ends 13/12/2008, 
+    so it's very hard to say which month of the year is the most popular
+- it seems that there is no obvious most popular day of the week, it's quite the same every day
+    Saturday is the only day we see some drop by around 20%
+- the most popular days are in October
+
+"""
+
+
 
 
 
@@ -226,6 +339,19 @@ test = df.loc[:][['DepTime', 'CRSDepTime', 'DepDelay']]
 
 
 
+"""
+ideas for correlations:
+- plain tail number and origin/sedtination
+- number of delays and date of the year
+- origin and destination and time of the year and cance lreason
+- distance and delay amount 
+- origin/destination and delay amount
+- weather cancellation and time of the year
+- at what time people travel during the week and weekends?
+"""
 
-# convert 3 columns in date time object
 
+"""
+suggestions:
+- we do not have data for the amount of passenger carried, condition of machines
+"""
